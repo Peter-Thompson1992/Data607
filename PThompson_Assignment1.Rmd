@@ -1,8 +1,9 @@
 ---
-title: "Data 607 Assignment 1: An Aging Congress"
+title: 'Data 607 Assignment 1: An Aging Congress'
 author: "Peter Thompson"
 date: "`r Sys.Date()`"
 output:
+  pdf_document: default
   html_document:
     df_print: paged
 ---
@@ -10,9 +11,9 @@ output:
 knitr::opts_chunk$set(eval = TRUE, message = FALSE, warning = FALSE, error = TRUE)
 #install.packages("tidyverse")
 #install.packages("palmerpenguins")
-#library(tidyverse)
-#library(palmerpenguins)
-#library(dplyr)
+library(tidyverse)
+library(palmerpenguins)
+library(dplyr)
 ```
 Reenable the above lines of code.
 
