@@ -1,0 +1,221 @@
+---
+title: "Data 607 Assignment 1: An Aging Congress"
+author: "Peter Thompson"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+---
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(eval = TRUE, message = FALSE, warning = FALSE, error = TRUE)
+#install.packages("tidyverse")
+#install.packages("palmerpenguins")
+#library(tidyverse)
+#library(palmerpenguins)
+#library(dplyr)
+```
+Reenable the above lines of code.
+
+###Introduction
+"Congress Today Is Older Than It's Ever Been
+OK, boomer? More like boomer, OK!"
+By Geoffrey Skelley
+
+In this exercise we will be exploring the age ranges U.S. Congressional members.The author--Geoffrey Skelley--posits that the US Congress has been steadily aging. Skelley attributes this largely to the Baby Boomer generation, "While immigration has augmented the population, 76 million boomers were born between 1946 and 1964, far more than the 47 million in the preceding Silent Generation, and greater than the 55 million and 62 million in the subsequent generations of Generation X and millennials, respectively." Because the Boomer generation is so massive, as they age it slowly raises the average age of the country. Skelley shows us that Boomers comprise the largest block of Congress of any generation. The shear size of the Boomer generation has allowed them to influence Congress for a long time. Skelley also adds that older people are far more likely to vote. Skelley finishes with by suggesting that the older generation struggles with modern technology and therefore may be ill-suited to address related problems. The data here will be used to evaluate the age groups of Congress. 
+
+Original Article: https://fivethirtyeight.com/features/aging-congress-boomers/
+Original Data: https://raw.githubusercontent.com/Peter-Thompson1992/Data607/main/data_aging_congress.csv
+
+###Importing the Data
+```{r Importing-GitHub-Data}
+congressional_demographics <- data.frame(read.csv("https://raw.githubusercontent.com/Peter-Thompson1992/Data607/main/data_aging_congress.csv", header = TRUE, sep = ","))
+party_codes <- data.frame(read.csv("https://raw.githubusercontent.com/Peter-Thompson1992/Data607/main/party_codes.csv", header = TRUE, sep = ","))
+state_names <- data.frame(read.csv("https://raw.githubusercontent.com/Peter-Thompson1992/Data607/main/state_codes.csv", header = TRUE, sep = ","))
+```
+```{r view-data}
+congressional_demographics
+```
+Here we have imported the data from the GitHub database. We will now need to do a series of transformations to change this data into a more usable form.
+
+###Transforming the Data
+```{r change-party-code-to-party_name}
+#unique(congressional_demographics$party_code)
+congressional_demographics <- left_join(congressional_demographics, party_codes, copy = TRUE)
+congressional_demographics <- subset(congressional_demographics, select = -(party_code))
+#help("left_join")
+```
+Here we have added a column that relates party_code columns between databases to turn the abbreviation into full party names. We can now delete the numeric code column for our main dataframe. 
+Adapted from R for Data Science (2e) chapter 19: Joins, as well as help(left_join) for syntax
+```{r change-state-code-to-state-name}
+congressional_demographics <- left_join(congressional_demographics, state_names, copy = TRUE)
+congressional_demographics <- subset(congressional_demographics, select = -(state_abbrev))
+```
+Here we have added a column that relates state_abbrev columns between databases to turn the abbreviation into full state names. We can now delete the abbreviated column for our main dataframe.
+Adapted from R for Data Science (2e) chapter 19: Joins
+```{r change start_date-to-year-only}
+congressional_demographics$year <- substr(congressional_demographics$start_date, 0, 4)
+congressional_demographics <- subset(congressional_demographics, select = -(start_date))
+```
+We would also like to display start date as simply the year, the specific date is less important. We can then remove the initial column of start_date
+Adapted from: https://www.datacamp.com/tutorial/subsets-in-r
+
+###Subsetting Dataset
+```{r remove-unnecessary-columns}
+congressional_demographics <- subset(congressional_demographics, select = -(bioguide_id))
+congressional_demographics <- subset(congressional_demographics, select = -(age_days))
+congressional_demographics <- subset(congressional_demographics, select = -(birthday))
+```
+```{r subset democrats}
+democrat_demographics <- subset(congressional_demographics, party == "Democratic")
+```
+```{r subset-republicans}
+republican_demographics <- subset(congressional_demographics, party == "Republican")
+```
+```{r subset-house-and-senate}
+house_demographics <- subset(congressional_demographics, chamber == "House")
+senate_demographics <- subset(congressional_demographics, chamber == "Senate")
+```
+Here we have removed several irrelevant columns. bioguide_id is a unique id number assigned to a member of Congress and is therefore irrelevant. We have also dropped the member's age in days, as we are primarily concerned with a year value. Years are generally more understood as a measure of time than days. For this reason we have also removed birthdays. We have also created two new dataframes--one for each of the two major parties. This is so we can later explore the age change by major party, to see if there are different relationships across party lines. There are too few observations of minor parties to be of interest.
+Adapted from: https://www.datacamp.com/tutorial/subsets-in-r
+
+###Aggregate Observations by year
+```{r aggregate-by-year}
+full_cong_demo_aggregate <- congressional_demographics %>% group_by(year) %>% summarise(mean_age = mean(age_years))
+```
+Here we are creating an aggregate of the ages of the entire Congress by year. Here will test if the assertion by Skelley is correct. Is Congress getting older?
+adapted from https://stackoverflow.com/questions/35443794/calculate-mean-of-multiple-rows-using-grouping-variables
+
+###Mean Age by Year
+```{r relate-mean-age-to-year}
+full_cong_demo_aggregate$year <- as.integer(full_cong_demo_aggregate$year)
+```
+Here we must quickly convert year into a numeric value as we wish to calculate a correlation coefficient.
+
+```{r graph-of-mean-age-by-year-total-congress}
+ggplot(data = full_cong_demo_aggregate, aes(x = year, y = mean_age, label = (''))) + 
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  geom_quantile(col = "red", quantiles = .5 ) +
+  theme(panel.background = element_rect(color = "black", linewidth = 1), plot.title = element_text(size = 20), plot.subtitle = element_text(size = 15), axis.text.x = element_text(angle = 90)) +
+  labs(title = "Mean Age by Year")+
+  scale_x_continuous(breaks = round(seq(min(full_cong_demo_aggregate$year), max(full_cong_demo_aggregate$year), by = 2),1))
+full_cong_demo_aggregate %>%
+  summarize(min = min(mean_age), max = max(mean_age))
+cor(x = full_cong_demo_aggregate$year, y = full_cong_demo_aggregate$mean_age)
+```
+This graph illustrates that the mean age of congress is in fact rising. The correlation coefficient between age and year is r = .56 indicating a moderate association. It is interesting that there was a marked decline in mean age during the 1970s-1980s, after which mean age in Congress increased dramatically. The min mean age for all of Congress is 49.52yrs and the max is 58.83yrs.Given the noticeable decrease in mean age from the late 1960s to early 1970s the feeling that Congress has increased in age over time may be augmented. Skelley is clearly correct that Congress has gotten older, it may feel like a greater increase in magnitude of mean age due to the preceding drop in mean age that is not too distant in memory for the Boomer generation.
+
+smoothing from RStudio's website e + geom_smooth(method = lm): Plot smoothed conditional means. aes() arguments: x, y, alpha, color, fill, group, linetype, linewidth, weight.
+plots covered by RStudio at https://rstudio.github.io/cheatsheets/html/data-visualization.html
+theme info adapted from http://www.sthda.com/english/wiki/ggplot2-axis-ticks-a-guide-to-customize-tick-marks-and-labels; and https://stackoverflow.com/questions/11335836/increase-number-of-axis-ticks
+
+###Mean Age of Democratic Party by Year
+```{r relate-democrat-mean-age-by-year}
+democratic_demo_aggregate <- democrat_demographics %>% group_by(year) %>% summarise(mean_age = mean(age_years))
+democratic_demo_aggregate$year <- as.integer(democratic_demo_aggregate$year)
+```
+```{r graph-of-mean-age-by-year-democratic}
+ggplot(data = democratic_demo_aggregate, aes(x = year, y = mean_age, label = (''))) + 
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  geom_quantile(col = "red", quantiles = .5 ) +
+  theme(panel.background = element_rect(color = "black", linewidth = 1), plot.title = element_text(size = 20), plot.subtitle = element_text(size = 15), axis.text.x = element_text(angle = 90)) +
+  labs(title = "Mean Age by Year for the Democratic Party")+
+  scale_x_continuous(breaks = round(seq(min(democratic_demo_aggregate$year), max(democratic_demo_aggregate$year), by = 2),1))
+cor(x = democratic_demo_aggregate$year, y = democratic_demo_aggregate$mean_age)
+democratic_demo_aggregate %>%
+  summarize(min = min(mean_age), max = max(mean_age))
+```
+The data shows us that the mean age of the Democratic party is more closely correlated to year than Congress as a whole. We have a correlation coefficient of .71. It is interesting that there was a marked decline in mean age during the 1970s-1980s, after which mean age of Democrats in Congress increased dramatically. The min for mean age of Democrats in Congress was 50.25yrs and the max was 60.60yrs. The min and max mean ages for Democrats are both higher than that of the total Congress.
+
+###Mean Age of Republican Party by Year
+```{r relate-repub-mean-age-by-year}
+republican_demo_aggregate <- republican_demographics %>% group_by(year) %>% summarise(mean_age = mean(age_years))
+republican_demo_aggregate$year <- as.integer(republican_demo_aggregate$year)
+```
+```{r graph-of-mean-age-by-year-republican}
+ggplot(data = republican_demo_aggregate, aes(x = year, y = mean_age, label = (''))) + 
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  geom_quantile(col = "red", quantiles = .5 ) +
+  theme(panel.background = element_rect(color = "black", linewidth = 1), plot.title = element_text(size = 20), plot.subtitle = element_text(size = 15), axis.text.x = element_text(angle = 90)) +
+  labs(title = "Mean Age by Year for the Republican Party")+
+  scale_x_continuous(breaks = round(seq(min(republican_demo_aggregate$year), max(republican_demo_aggregate$year), by = 2),1))
+cor(x = republican_demo_aggregate$year, y = republican_demo_aggregate$mean_age)
+republican_demo_aggregate %>%
+  summarize(min = min(mean_age), max = max(mean_age))
+```
+As we see in this graph the mean age of republicans has increased over the last century as well. The correlation coefficient is r = .23, which is much lower than it was for Democrats. We see the mean age for Republicans also decreased dramatically in the late 1960s-1980s. Given the time frame for the steep decline in mean ages lines up quite well for Republicans and Democrats, it would seem there are potentially multiple lurking variables. Perhaps not coincidentally these dates line up with the escalation of the war in Vietnam, as well as the Watergate scandal and resignation of Richard Nixon. It was a time marked by general disillusionment with government, which perhaps led to the ousting of older members of Congress. This is all speculation, of course.
+
+###Mean Age of the House of Reps by Year
+```{r relate-house-mean-age-by-year}
+house_demo_aggregate <- democrat_demographics %>% group_by(year) %>% summarise(mean_age = mean(age_years))
+house_demo_aggregate$year <- as.integer(house_demo_aggregate$year)
+```
+```{r graph-of-mean-age-by-year-house}
+ggplot(data = house_demo_aggregate, aes(x = year, y = mean_age, label = (''))) + 
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  geom_quantile(col = "red", quantiles = .5 ) +
+  theme(panel.background = element_rect(color = "black", linewidth = 1), plot.title = element_text(size = 20), plot.subtitle = element_text(size = 15), axis.text.x = element_text(angle = 90)) +
+  labs(title = "Mean Age by Year for the House")+
+  scale_x_continuous(breaks = round(seq(min(house_demo_aggregate$year), max(house_demo_aggregate$year), by = 2),1))
+cor(x = house_demo_aggregate$year, y = house_demo_aggregate$mean_age)
+house_demo_aggregate %>%
+  summarize(min = min(mean_age), max = max(mean_age))
+```
+We will sumarrize after repeating for the Senate.
+
+###Mean Age of the Senate by Year
+```{r relate-senate-mean-age-by-year}
+senate_demo_aggregate <- senate_demographics %>% group_by(year) %>% summarise(mean_age = mean(age_years))
+senate_demo_aggregate$year <- as.integer(senate_demo_aggregate$year)
+```
+```{r graph-of-mean-age-by-year-senate}
+ggplot(data = senate_demo_aggregate, aes(x = year, y = mean_age, label = (''))) + 
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  geom_quantile(col = "red", quantiles = .5 ) +
+  theme(panel.background = element_rect(color = "black", linewidth = 1), plot.title = element_text(size = 20), plot.subtitle = element_text(size = 15), axis.text.x = element_text(angle = 90)) +
+  labs(title = "Mean Age by Year for the Senate")+
+  scale_x_continuous(breaks = round(seq(min(senate_demo_aggregate$year), max(senate_demo_aggregate$year), by = 2),1))
+cor(x = senate_demo_aggregate$year, y = senate_demo_aggregate$mean_age)
+senate_demo_aggregate %>%
+  summarize(min = min(mean_age), max = max(mean_age))
+```
+Summary after charting the difference between House and Senate.
+
+###Differences Between Mean Ages by Chamber of Congress
+```{r measuring-delta-mean-age-house-vs-senate}
+house_senate_delta <- cbind(senate_demo_aggregate, house_demo_aggregate)
+colnames(house_senate_delta) <- c("year", "senate_mean_age", "year_delete", "house-mean-age")
+house_senate_delta <- subset(house_senate_delta, select = -(year_delete))
+house_senate_delta$mean_difference <- house_senate_delta$senate_mean_age - house_senate_delta$`house-mean-age`
+```
+```{r mean-age-delta-by-year}
+ggplot(data = house_senate_delta, aes(x = year, y = mean_difference, label = (''))) + 
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  geom_quantile(col = "red", quantiles = .5 ) +
+  theme(panel.background = element_rect(color = "black", linewidth = 1), plot.title = element_text(size = 20), plot.subtitle = element_text(size = 15), axis.text.x = element_text(angle = 90)) +
+  labs(title = "Mean Age Delta (Msenate - Mhouse) by Year")+
+  scale_x_continuous(breaks = round(seq(min(house_senate_delta$year), max(house_senate_delta$year), by = 2),1))
+cor(x = house_senate_delta$year, y = house_senate_delta$mean_difference)
+house_senate_delta %>%
+  summarize(min = min(mean_difference), max = max(mean_difference))
+```
+We see here the Senate mean age is consistently older than the House mean age.
+House min: 50.25	House max: 60.60
+Senate min: 52.83 Senate max:	63.93
+
+I don't think the differences between House and Senate mean ages would surprise anyone. The House is often seen as a stepping stone to the Senate, additionally Senators serve terms three-times as long. Generally it is incredibly hard to challenge an incumbent Senator.
+
+###Conclusion
+It is clear that Skelley's supposition that Congress is getting older has been proven to be true. While his supposition that this is due largely to the aging Boomer generation seems like a valid argument, it would be nice to overlay some information about the US population as a whole. Adding data for the whole US population, such as: average age, and population by age group--among other things--would form the basis for a strong multivariable regression analysis. The most compelling evidence in favor of Skelley's main supposition is that populations of industrialized (often called Westernized) are aging--many to the point of decline. However, without further analysis, it would be hard to say for sure if that is the only cause. With more data points and an experiment, it might be possible to draw more concrete causal lines for the growing mean age of Congress.
+
+Source for evidence of a rightward shift: https://www.chicagobooth.edu/review/there-are-two-americas-and-age-divider
+Source for evidence of aging populations: https://www.csis.org/analysis/addressing-aging-population-through-digital-transformation-western-hemisphere
+
+###GitHub Repository and RPubs URLs
+GitHub: https://github.com/Peter-Thompson1992/Data607/tree/main
+RPubs: https://rpubs.com/pthompson_92/1145087
