@@ -1,0 +1,261 @@
+---
+title: "PThompson_Assignment2"
+author: "Peter Thompson"
+date: "`r Sys.Date()`"
+output: html_document
+---
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(eval = TRUE, message = FALSE, warning = FALSE, error = TRUE)
+#install.packages("tidyverse")
+#install.packages("palmerpenguins")
+#install.packages("RPostgreSQL")
+#install.packages("qualtRics")
+#install.packages("keyring")
+#install.packages("DBI")
+#install.packages("RODBC")
+#install.packages("odbc")
+#install.packages("dbplyr")
+#install.packages("devtools")
+#install.packages("remotes")
+#remotes::install_github("r-dbi/RPostgres")
+#install.packages("RPostgres")
+#install.packages("plyr")
+library(tidyverse)
+library(palmerpenguins)
+#library(dplyr)
+library(RPostgreSQL)
+library(qualtRics)
+library(DBI)
+library(RODBC)
+library(odbc)
+library(plyr)
+library(dbplyr)
+#library("keyring")
+```
+This code will install all and load all of the packages necessary to run the rest of this file.
+
+###Introduction
+In this file we will demonstrate pulling data from multiple data sources, and combining them to do something useful. In this case I have arbitrarily picked names, the movies come from best of 2023 movie critic lists. The ratings were randomly generated (including null values), so it won't reflect real world opinions.
+
+This file.Rmd can be found on GitHub at:
+This file.html can be found on GitHub at:
+
+###Import Data from PostgreSQL
+```{r import-data-friends-movie-ratings}
+
+password <- rstudioapi::askForPassword("Database password")
+
+db <- "movies"
+host_db <- "localhost"  
+db_port <- 5432
+db_user <- "postgres"
+db_password <- password
+con <- dbConnect(RPostgres::Postgres(), dbname = db, host=host_db, port=db_port, user=db_user, password=db_password)  
+dbListTables(con) 
+ratings <- data.frame(dbReadTable(con, name = "ratings"))
+
+```
+Here we have connected to our PostgreSql database in order to create a dataframe with all of our observations. There is a password protection coded in this file, so other users will have to use the steps below to extract the same data from GitHub.
+
+SQL Code
+CREATE TABLE IF NOT EXISTS public.ratings
+(
+    first_name character(20) COLLATE pg_catalog."default",
+    oppenheimer integer,
+    barbie integer,
+    the_holdovers integer,
+    killers_of_the_flower_moon integer,
+    john_wick_chapter_4 integer,
+    m3gan integer,
+    dungeons_and_dragons_honor_among_thieves integer,
+    the_boy_and_the_heron integer,
+    godzilla_minus_one integer,
+    guardians_of_the_galaxy_vol_3 integer,
+    mission_impossible_dead_reckoning_part_one integer,
+    the_killer integer,
+    spider_man_into_the_spider_verse integer,
+    anatomy_of_a_fall integer,
+    past_lives integer,
+    may_december integer
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public.ratings
+    OWNER to postgres;
+
+Adapted from: https://hevodata.com/learn/rpostgresql/#intro; https://www.datacareer.de/blog/connect-to-postgresql-with-r-a-step-by-step-example/; https://rviews.rstudio.com/2019/03/21/how-to-avoid-publishing-credentials-in-your-code/
+
+###Loading the Data from Github CSV
+```{r github-get-data-csv}
+
+ratings <- data.frame(read.csv("https://raw.githubusercontent.com/Peter-Thompson1992/Data607/main/SQL_basis_data.csv", header = TRUE, sep = ","))
+```
+
+###Taking Survey Data
+
+Without database password, this can can be used to load the database csv from GitHub.
+```{r download-survey-data-from-qualtrics, echo=TRUE}
+
+#qualtrics_api_credentials(api_key = "<YOUR-QUALTRICS_API_KEY>", 
+#                          base_url = "https://sjc1.qualtrics.com/API",
+#                          install = TRUE)
+qualtrics_movie_survey <- data.frame(read.csv("https://raw.githubusercontent.com/Peter-Thompson1992/Data607/main/movie_ratings_data_February%2B4%2C%2B2024_16.13.csv", header = TRUE, sep = ","))
+qualtrics_movie_survey <- qualtrics_movie_survey[-c(1:17)]
+qualtrics_movie_survey = qualtrics_movie_survey[-1,]
+qualtrics_movie_survey = qualtrics_movie_survey[-1,]
+qualtrics_movie_survey[qualtrics_movie_survey == "Have not seen"] <- NA
+#names(qualtrics_movie_survey)[names(qualtrics_movie_survey) == "q1"] <- "first_name"
+lookup_questions <- data.frame(read.csv("https://raw.githubusercontent.com/Peter-Thompson1992/Data607/main/qualtric_question_lookup.csv", header = FALSE, sep = ","))
+qualtrics_movie_survey <- qualtrics_movie_survey
+colnames(qualtrics_movie_survey) <- plyr::mapvalues(colnames(qualtrics_movie_survey),
+    as.character(lookup_questions$V1), 
+    as.character(lookup_questions$V2))
+
+```
+This is how a survey could be brought automatically from Qulatrics into a dataframe within RStudio. Unfortunately Qualtrics direct API pulls such as this are not free. We can; however, import Qualtrics survey data manually by exporting a .csv file from Qualtrics, then uploading that to GitHub. We can then return the csv to RStudio by pulling from GitHub. For the sake of synergy, it is best to setup the Qualtrics survey in the same order in which the database stores data. Qualtrics exports a lot of data that is unnessecary for this task. It may be useful in many cases, so the transformation should be suited to individual project needs. In this case I have removed all of the columns preceding my target data. In our survey we accounted for the fact that a respondent may not have seen the movie. In this case we also need to upload another file from GitHub. This will allow us to lookup the headers from the qualtrics output and change them to match our database in order to mesh the data later on.
+
+survey location: https://qualtricsxm8cl82k959.qualtrics.com/jfe/form/SV_1LmNS0kbFRSDons
+adapted from: https://cran.r-project.org/web/packages/qualtRics/vignettes/qualtRics.html; https://api.qualtrics.com/1aea264443797-base-url-and-datacenter-i-ds; https://stackoverflow.com/questions/47636589/replace-column-names-using-lookup-table-if-lookup-table-contains-old-column-nam
+
+###Combine Data Sources
+```{r add-db-pull-to-qual-pull}
+
+combined_ratings <- rbind.fill(ratings, qualtrics_movie_survey)
+```
+Now that we have combined our data sources into one working dataframe, we are finally able to more analysis. First we will upload the new data back into the database as a new table.This can of course be skipped if data is being pulled from GitHub. After upload the database connection should be closed. 
+
+###Store New Dataframe in PostgreSQL and Close Connection to the Database
+```{r upload ammended database}
+
+dbWriteTable(con, "combine_ratings", combined_ratings)
+```
+```{r close-database connection}
+dbDisconnect(con)
+```
+
+###Separate Movies
+```{r separate-movie}
+
+oppenheimer <- combined_ratings[,c("first_name","oppenheimer")]
+barbie <- combined_ratings[,c("first_name","barbie")]
+the_holdovers <- combined_ratings[,c("first_name","the_holdovers")]
+killers_of_the_flower_moon <- combined_ratings[,c("first_name","killers_of_the_flower_moon")]
+john_wick_chapter_4 <- combined_ratings[,c("first_name","john_wick_chapter_4")]
+m3gan <- combined_ratings[,c("first_name","m3gan")]
+dungeons_and_dragons_honor_among_thieves <- combined_ratings[,c("first_name","dungeons_and_dragons_honor_among_thieves")]
+the_boy_and_the_heron <- combined_ratings[,c("first_name","the_boy_and_the_heron")]
+godzilla_minus_one <- combined_ratings[,c("first_name","godzilla_minus_one")]
+guardians_of_the_galaxy_vol_3 <- combined_ratings[,c("first_name","guardians_of_the_galaxy_vol_3")]
+mission_impossible_dead_reckoning_part_one <- combined_ratings[,c("first_name","mission_impossible_dead_reckoning_part_one")]
+the_killer <- combined_ratings[,c("first_name","the_killer")]
+spider_man_into_the_spider_verse <- combined_ratings[,c("first_name","spider_man_into_the_spider_verse")]
+anatomy_of_a_fall <- combined_ratings[,c("first_name","anatomy_of_a_fall")]
+past_lives <- combined_ratings[,c("first_name","past_lives")]
+may_december <- combined_ratings[,c("first_name","may_december")]
+```
+Here we remove null values.
+
+```{r remove-null}
+
+oppenheimer <- na.omit(oppenheimer)
+barbie <- na.omit(barbie)
+the_holdovers <- na.omit(the_holdovers)
+killers_of_the_flower_moon <- na.omit(killers_of_the_flower_moon)
+john_wick_chapter_4 <- na.omit(john_wick_chapter_4)
+m3gan <- na.omit(m3gan)
+dungeons_and_dragons_honor_among_thieves <- na.omit(dungeons_and_dragons_honor_among_thieves)
+the_boy_and_the_heron <- na.omit(the_boy_and_the_heron)
+godzilla_minus_one <- na.omit(godzilla_minus_one)
+guardians_of_the_galaxy_vol_3 <- na.omit(guardians_of_the_galaxy_vol_3)
+mission_impossible_dead_reckoning_part_one <- na.omit(mission_impossible_dead_reckoning_part_one)
+the_killer <- na.omit(the_killer)
+spider_man_into_the_spider_verse <- na.omit(spider_man_into_the_spider_verse)
+anatomy_of_a_fall <- na.omit(anatomy_of_a_fall)
+past_lives <- na.omit(past_lives)
+may_december <- na.omit(may_december)
+```
+
+```{r make_numeric}
+
+oppenheimer$oppenheimer <- as.numeric(oppenheimer$oppenheimer)
+barbie$barbie <- as.numeric(barbie$barbie)
+the_holdovers$the_holdovers <- as.numeric(the_holdovers$the_holdovers)
+killers_of_the_flower_moon$killers_of_the_flower_moon <- as.numeric(killers_of_the_flower_moon$killers_of_the_flower_moon)
+john_wick_chapter_4$john_wick_chapter_4 <- as.numeric(john_wick_chapter_4$john_wick_chapter_4)
+m3gan$m3gan <- as.numeric(m3gan$m3gan)
+dungeons_and_dragons_honor_among_thieves$dungeons_and_dragons_honor_among_thieves <- as.numeric(dungeons_and_dragons_honor_among_thieves$dungeons_and_dragons_honor_among_thieves)
+the_boy_and_the_heron$the_boy_and_the_heron <- as.numeric(the_boy_and_the_heron$the_boy_and_the_heron)
+godzilla_minus_one$godzilla_minus_one <- as.numeric(godzilla_minus_one$godzilla_minus_one)
+guardians_of_the_galaxy_vol_3$guardians_of_the_galaxy_vol_3 <- as.numeric(guardians_of_the_galaxy_vol_3$guardians_of_the_galaxy_vol_3)
+mission_impossible_dead_reckoning_part_one$mission_impossible_dead_reckoning_part_one <- as.numeric(mission_impossible_dead_reckoning_part_one$mission_impossible_dead_reckoning_part_one)
+the_killer$the_killer <- as.numeric(the_killer$the_killer)
+spider_man_into_the_spider_verse$spider_man_into_the_spider_verse <- as.numeric(spider_man_into_the_spider_verse$spider_man_into_the_spider_verse)
+anatomy_of_a_fall$anatomy_of_a_fall <- as.numeric(anatomy_of_a_fall$anatomy_of_a_fall)
+past_lives$past_lives <- as.numeric(past_lives$past_lives)
+may_december$may_december <- as.numeric(may_december$may_december)
+```
+Convert scores to numeric.
+
+
+```{r calculate-means}
+
+mean_oppenheimer <- mean(oppenheimer[,2])
+mean_barbie <- mean(barbie[,2])
+mean_the_holdovers <- mean(the_holdovers[,2])
+mean_killers_of_the_flower_moon <- mean(killers_of_the_flower_moon[,2])
+mean_john_wick_chapter_4 <- mean(john_wick_chapter_4[,2])
+mean_m3gan <- mean(m3gan[,2])
+mean_dungeons_and_dragons_honor_among_thieves <- mean(dungeons_and_dragons_honor_among_thieves[,2])
+mean_the_boy_and_the_heron <- mean(the_boy_and_the_heron[,2])
+mean_godzilla_minus_one <- mean(godzilla_minus_one[,2])
+mean_guardians_of_the_galaxy_vol_3 <- mean(guardians_of_the_galaxy_vol_3[,2])
+mean_mission_impossible_dead_reckoning_part_one <- mean(mission_impossible_dead_reckoning_part_one[,2])
+mean_the_killer <- mean(the_killer[,2])
+mean_spider_man_into_the_spider_verse <- mean(spider_man_into_the_spider_verse[,2])
+mean_anatomy_of_a_fall <- mean(anatomy_of_a_fall[,2])
+mean_past_lives <- mean(past_lives[,2])
+mean_may_december <- mean(may_december[,2])
+```
+Calculated all means
+
+#Plot of Mean Score
+```{r plot-plot-means-of-score}
+
+a <- "oppenheimer"
+b <- "barbie"
+c <- "the_holdovers"
+d <- "killers_of_the_flower_moon"
+e <- "john_wick_chapter_4"
+f <- "m3gan"
+g <- "dungeons_and_dragons_honor_among_thieves"
+h <- "the_boy_and_the_heron"
+i <- "godzilla_minus_one"
+j <- "guardians_of_the_galaxy_vol_3"
+k <- "mission_impossible_dead_reckoning_part_one"
+l <- "the_killer"
+m <- "spider_man_into_the_spider_verse"
+n <- "anatomy_of_a_fall"
+o <- "past_lives"
+p <- "may_december"
+
+movie_name <- c(a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p)
+movie_score <- c(mean_oppenheimer, mean_barbie, mean_the_holdovers, mean_killers_of_the_flower_moon, mean_john_wick_chapter_4, mean_m3gan, mean_dungeons_and_dragons_honor_among_thieves, mean_the_boy_and_the_heron, mean_godzilla_minus_one, mean_guardians_of_the_galaxy_vol_3, mean_mission_impossible_dead_reckoning_part_one, mean_the_killer, mean_spider_man_into_the_spider_verse, mean_anatomy_of_a_fall, mean_past_lives, mean_may_december)
+
+mean_all<- mean(movie_score)
+df_mean <- data.frame(movie_name, movie_score)
+
+ggplot(data = df_mean, aes(x = movie_name, y = movie_score, label = (''))) + 
+  geom_point() +
+  #geom_smooth(method = "lm", se = FALSE) +
+  theme(panel.background = element_rect(color = "black", linewidth = 1), plot.title = element_text(size = 20), plot.subtitle = element_text(size = 15), axis.text.x = element_text(angle = 90)) +
+  labs(title = "Mean Score by Movie")
+  #scale_x_continuous(breaks = round(seq(min(df_mean$movie_score), max(df_mean$movie_score), by = 2),1))
+```
+
+###Conclusion
+
+In this exercise we were able to download data from multiple sources, combine them, and return the new values as a separate table in our database. We also explored the idea of using survey software to gather data--unfortunately we were not able to demonstrate the full capability of that due to Qualtrics being pay walled for API exports to R. If we were to complete this task again, we could group ratings together based on movie genre. The distribution of mean scores here is no surprise given that the data was randomly generated. The mean of all movies is right around 3, as to be expected.
+
+
+
