@@ -1,0 +1,247 @@
+---
+title: "Pthompson_Assignment3"
+author: "Peter Thompson"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(eval = TRUE, message = FALSE, warning = FALSE, error = TRUE)
+#install.packages("tidyverse")
+#install.packages("palmerpenguins")
+library(tidyverse)
+library(palmerpenguins)
+#library(dplyr)
+library(RPostgres)
+```
+##Links to RMrkdwn Files:
+GitHub Link: 
+RPubs Link: https://rpubs.com/pthompson_92/1147864
+
+Here we import the data from 538. For this excercise only the all_ages data is relevant---we are only concerned with retrieving a list of all majors containing either of the key strings "DATA", or "STATISTICS". 
+#Import data from five-thirty-eight GitHub
+```{r import-538-data}
+all_ages_df <- data.frame(read.csv("https://raw.githubusercontent.com/fivethirtyeight/data/master/college-majors/all-ages.csv"))
+recent_grads_df <- data.frame(read.csv("https://raw.githubusercontent.com/fivethirtyeight/data/master/college-majors/recent-grads.csv"))
+grad_students_df <- data.frame(read.csv("https://raw.githubusercontent.com/fivethirtyeight/data/master/college-majors/grad-students.csv"))
+```
+
+
+Below we will find the majors that include "DATA", or "STATISTICS". From the raw data sets provided by 538. There were three data sets listed on the website that were used in the writing of the related article. I have started by first importing the csv from GitHub to RStudio. Then the database is exported to PostgreSQL as a new database titled "all_majors." In this case we are only concerned with the all ages data, in order to capture all possible majors that include the target strings. We can then use the following code within the database to create a new table containing only the information we want:
+
+PostgrSQL Code:
+
+CREATE TABLE new_list AS(
+SELECT "Major" from all_majors
+	WHERE UPPER("Major") similar to UPPER('%((data)|(statistics))%')
+)
+
+Then it is as simple as returning the new table to RStudio as a new dataframe.
+
+#Question 1 Using 538 Data
+
+```{r filter-538-data-postgres}
+password <- rstudioapi::askForPassword("Database password")
+
+db <- "postgres"
+host_db <- "localhost"  
+db_port <- 5432
+db_user <- "postgres"
+db_password <- password
+con <- dbConnect(RPostgres::Postgres(), dbname = db, host=host_db, port=db_port, user=db_user, password=db_password)  
+dbListTables(con)
+dbWriteTable(con, "all_majors", all_ages_df, row.names=FALSE, overwrite=TRUE)
+new_list <- data.frame(dbReadTable(con, name = "new_list"))
+View(new_list)
+dbDisconnect(con)
+
+```
+```{r graph-unemployment}
+
+ggplot(data = new_list, aes(x = Major, y = Unemployment_rate)) + 
+  geom_col() +
+  theme(panel.background = element_rect(color = "black", linewidth = 1), plot.title = element_text(size = 10), plot.subtitle = element_text(size = 15)) +
+  labs(title = "Unemployment Rate by Major Containing 'Data' or 'Statistics'")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1, size = 5))
+
+ggplot(data = new_list, aes(x = Major, y = Total)) + 
+  geom_col() +
+  theme(panel.background = element_rect(color = "black", linewidth = 1), plot.title = element_text(size = 10), plot.subtitle = element_text(size = 15)) +
+  labs(title = "Total Students by Selected Majors")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1, size = 5))
+
+```
+PostgreSQL adapted from: https://www.youtube.com/watch?v=7FtUUOCwArI
+
+
+#Question 2 String Transformation
+
+Here we will take the input string as defined on the assignment worksheet to appear as follows:
+
+[1] "bell pepper"  "bilberry"     "blackberry"   "blood orange"
+
+[5] "blueberry"    "cantaloupe"   "chili pepper" "cloudberry"  
+
+[9] "elderberry"   "lime"         "lychee"       "mulberry"    
+
+[13] "olive"        "salal berry"
+
+Into:
+
+c("bell pepper", "bilberry", "blackberry", "blood orange", "blueberry", "cantaloupe", "chili pepper", "cloudberry", "elderberry", "lime", "lychee", "mulberry", "olive", "salal berry")
+
+The essence here is to use regex to find the correct patterns to use to turn one long string into a character vector. Short of defining each line in the input as a separate string--then printing out all strings in order-- using cat('string name', "\n\") was the only way I could find to recreate the output that was given to us (adapted from source below). I made the assumption that spacing was intentionally arbitrary between words. It seems extremely ambiguous how exactly this data was meant to be entered.
+
+https://bookdown.org/roy_schumacher/r4ds/strings.html
+https://statisticsglobe.com/print-newline-to-rstudio-console-in-r
+
+Below is the code to recreate the view pictured in the assignment:
+```{r regex-vector-to-string}
+str_in <- '[1] "bell pepper"  "bilberry"     "blackberry"   "blood orange"
+[5] "blueberry"    "cantaloupe"   "chili pepper" "cloudberry"  
+[9] "elderberry"   "lime"         "lychee"       "mulberry"    
+[13] "olive"        "salal berry"'
+
+cat(str_in, "\n")
+
+```
+
+Now we can transform the data. I realized after trying to brute force change this, that I could probably pull everything the begins and ends with a letter.
+```{r remove-objects}
+head(str_in) %>%
+  str_c(collapse = "\\n")
+  str_remove_all(str_in, "[:digit:]")
+
+str_out <- str_extract_all(str_in, "\\w[a-y]+\\s?[a-y]+\\w")
+  
+print(str_out)
+
+#cat(str_c(str_out, collapse = " , "))
+
+str_out2 <- unlist(str_out)
+
+cat(str_c(str_out2, collapse = " , "))
+
+```
+Character Classes
+\w = Word
+\s = white space
+Using the character class \w tells r that we want to start with a word. We can then specify the range within brackets. The cheat-sheet uses a-q as an example, but we need to go through y. This accepts one or more characters in that range. ? denotes optional and \s denotes white space. meaning the word may be followed by a white space. Then we say it is followed by the same range of characters, ending in a word. Initially I got an error saying this wouldn't work due to it not being an 'atomic vector'.
+
+  A vector is atomic when it's one of the basic classes in R. There's a help keyword for it: ?atomic. It goes to the help page for vector, which says this:
+
+  The atomic modes are "logical" , "integer" , "numeric" (synonym "double" ), "complex" , "character" and "raw".
+https://community.rstudio.com/t/how-to-solve-an-atomic-vector-problem-when-getting-data-through-an-api/49463/6
+
+So my issue here was that my str_out was not usable with the cat function and needs to be converted. 
+
+Groups and Ranges
+[a-q] Lower case letter from a to q
+
+
+https://afit-r.github.io/characters
+Invaluable for this: https://cheatography.com/davechild/cheat-sheets/regular-expressions/
+https://stat545.com/character-vectors.html#regex-free-string-manipulation-with-stringr-and-tidyr
+
+
+#Question 3 match operators
+Here we will use the character vector from Question 2 to show how each of the operators listed work. I had to change this because I realized that I wasn't getting the proper results as no instances existed. The stringr cheat sheet was extremely helpful to do this. I found this section to be extremely confusing. It's unclear if the examples in the homework are intentionally wrong. I assumed that we were sipposed to answer based on the exact entry of the written code.
+
+
+https://evoldyn.gitlab.io/evomics-2018/ref-sheets/R_strings.pdf
+https://www2.tntech.edu/ilearn/Instructor/pages/le/question-library/question_library-instructor-regular_expressions.htm
+https://www.regular-expressions.info/dot.html
+
+```{r match-operators}
+#Question 1
+match_1 <- c("aaa", "toot", "efg", "hhh", "ijk")
+match_out <- str_detect(match_1, "(.)\1\1")
+print(match_out)
+match_1 <- c("aaa", "bcd", "efg", "hhh", "ijk")
+match_out <- str_detect(match_1, "(.)\\1\\1")
+print(match_out)
+
+#Question 2
+match_2 <- c("aaa", "bcd", "efg", "hhh", "wtooti")
+match_out2 <- str_detect(match_2, "(.)(.)\\2\\1")
+print(match_out2)
+
+#Question 3
+match_3 <- c("aaa", "bcd", "efg", "tutu", "wtortoi")
+match_out3 <- str_detect(match_3, "(..)\\1")
+print(match_out3)
+
+#Question 4
+match_4 <- c("aaa", "bcd", "efg", "drdod", "wtortoi")
+match_out4 <- str_detect(match_4, "(.).\\1.\\1")
+print(match_out4)
+
+#Question 5
+match_5 <- c("aaa", "bcd", "efg", "drdod", "atoyota")
+match_out5 <- str_detect(match_5, "(.)(.)(.).*\\3\\2\\1")
+print(match_out5)
+
+```
+1.
+"(.)\1\1"
+
+As written here, this code just returns false for every string in the vector. It doesn't seem to do anything. If changed to "(.)\\1\\1" it finds instances of three repeating characters (in this case str_detect is just a boolean testing if each string in the vector has an occurrence of three characters in a row.)
+
+
+2.
+"(.)(.)\\2\\1"
+As written here this code will return a boolean operator to see if there are two characters the repeat in reverse order in each of the strings in the vector.
+
+
+3.
+(..)\1
+Like question 1--as written here, this code just returns false for every string in the vector. It doesn't seem to do anything. Changing to double backslash will look for instances of two characters repeating in a row. They cannot have a separation between them. E.g. 'tutu' is true, 'turtu' is false.
+
+4.
+"(.).\\1.\\1"
+This operates by looking for a character that appears three times as first, middle, and last in a group of five characters. It follows the pattern [ABACA] where A denotes any character and B and C are any characters that != A
+
+5.
+"(.)(.)(.).*\\3\\2\\1"
+It follows the pattern [ABCDCBA] where A,B,C denote any character and D is any character separating the sequence. It can be thought of as a reflection over a y-axis with D being the y-axis and ABC being the x-axis values to reflect.
+
+
+Sources I used:
+https://www.youtube.com/watch?v=YNmpmmYBICo
+https://www.youtube.com/watch?v=q8SzNKib5-4
+https://www.youtube.com/watch?v=3toJ2LhvEfw
+https://www.youtube.com/watch?v=rhzKDrUiJVk
+
+
+#Question 4 Regular expressions
+
+Construct regular expressions to match words that:
+
+    Start and end with the same character.
+    Contain a repeated pair of letters (e.g. "church" contains "ch" repeated twice.)
+    Contain one letter repeated in at least three places (e.g. "eleven" contains three "e"s.)
+
+
+```{test match-words}
+
+match_words <- c("shenanigans", "brouhaha", "salopettes")
+
+#Start and end with the same character
+match_first_last_letter <- str_match(match_words, "^(.).*\\1$")
+
+print(match_first_last_letter)
+
+#Contain a repeated pair of letters (e.g. "church" contains "ch" repeated twice.)
+#we can take the above code from Question 3.3 to start
+match_repeated_pair <- str_match(match_words, "(..).*\\1")
+
+print(match_repeated_pair) 
+
+#Contain one letter repeated in at least three places (e.g. "eleven" contains three "e"s.)
+match_three <- str_match(match_words, "(.).?\\1.*\\1")
+
+print(match_three)
+```
+
+Super useful cheat sheets to remember what each of the characters and quantifiers do: https://www.rexegg.com/regex-quickstart.html https://cheatography.com/davechild/cheat-sheets/regular-expressions/
+I had to run a lot of these externally through https://rdrr.io/snippets/. For some reason all of the packages seemed to stop working on my local machine.
