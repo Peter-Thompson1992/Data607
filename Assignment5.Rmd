@@ -1,0 +1,303 @@
+---
+title: "Assignment_5"
+author: "Peter Thompson"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(eval = TRUE, message = FALSE, warning = FALSE, error = TRUE)
+
+#install.packages("tidyverse")
+#install.packages("palmerpenguins")
+#install.packages("RPostgres")
+library(tidyverse)
+library(palmerpenguins)
+library(dplyr)
+library(RPostgres)
+```
+
+GitHub Link: 
+RPubs Link: 
+
+
+#Here we will generate a Postgres table containing the data we would like to use. I have also uploaded a csv to GitHub that can be used in place of Postgres to import the csv data. The below code will generate the baseline table we need, and then will import the csv values from the csv file on my local machine to fill the sql table. Fortunately I already learned how to do much of this for assignment 3, so I was able to reuse a bunch of the code I had created to inititalize the Postgres database and manipulate tables through queries in pgAdmin.
+#Useful Postgres sources: https://www.commandprompt.com/education/create-table-as-select-statement-in-postgresql/; http://127.0.0.1:62789/help/help/schema_dialog.html
+
+-- SCHEMA: public
+
+-- DROP SCHEMA IF EXISTS public ;
+
+CREATE SCHEMA IF NOT EXISTS public
+    AUTHORIZATION pg_database_owner;
+
+COMMENT ON SCHEMA public
+    IS 'standard public schema';
+
+GRANT USAGE ON SCHEMA public TO PUBLIC;
+
+GRANT ALL ON SCHEMA public TO pg_database_owner;
+
+CREATE TABLE IF NOT EXISTS public.flight_data
+(
+    "Airline" text COLLATE pg_catalog."default",
+    "Arrival_status" text COLLATE pg_catalog."default",
+    "Los Angeles" integer,
+    "Phoenix" integer,
+    "San Diego" integer,
+    "San Francisco" integer,
+    "Seattle" integer
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public.flight_data
+    OWNER to postgres;
+
+COPY flight_data(Airline, Arrival_status, Los Angeles, Phoenix, San Diego, San Francisco, Seattle)
+FROM 'F:\R 607\Weekly Assignments\Week 5\airline_arrivals.csv'
+DELIMITER ','
+CSV HEADER;
+
+#This will view the table we have just created to ensure that our import was correct
+SELECT * FROM public.flight_data
+
+#Next I would like to generate two new unique tables, one per airline that will allow us to then manipulate our three dataframes within r
+CREATE TABLE alaska AS(
+SELECT * from flight_data
+	WHERE UPPER("Airline") similar to UPPER('%((Alaska))%')
+)
+
+CREATE TABLE AM_West AS(
+SELECT * from flight_data
+	WHERE UPPER("Airline") similar to UPPER('%((AM West))%')
+)
+
+
+
+
+
+```{r create-postgressql-table}
+password <- rstudioapi::askForPassword("Database password")
+
+db <- "AirlineData"
+host_db <- "localhost"  
+db_port <- 5432
+db_user <- "postgres"
+db_password <- password
+con <- dbConnect(RPostgres::Postgres(), dbname = db, host=host_db, port=db_port, user=db_user, password=db_password)  
+dbListTables(con)
+#We would use the below code to upload the initial csv to postgres if we imported the csv into r as a dataframe first. However, we have already directly imported the csv into postgres, so this is unneccessary. I have left it here just to show a different method.
+#dbWriteTable(con, "flight_data", , row.names=FALSE, overwrite=TRUE)
+flight_data_df <- data.frame(dbReadTable(con, name = "flight_data"))
+alaska_df <- data.frame(dbReadTable(con, name = "alaska"))
+am_west_df <- data.frame(dbReadTable(con, name = "am_west"))
+dbDisconnect(con)
+
+```
+
+#These lines are not necessary, but I do want to save a local instance of the new tables I have created within postgres
+```{r save-new-csvs}
+write.csv(alaska_df, "F:/R 607/Weekly Assignments/Week 5/alaska.csv")
+write.csv(am_west_df, "F:/R 607/Weekly Assignments/Week 5/am_west.csv")
+```
+
+#Here is the code to import the csv from GitHub as opposed to using the Postgres table created in the previous code chunk. Both will result in the same dataframe creation within r.
+```{r import-csv-from-GitHub}
+#airline_data_df <- data.frame(read.csv("https://raw.githubusercontent.com/Peter-Thompson1992/Data607/main/airline_arrivals.csv"))
+#alaska_df <- data.frame(read.csv("https://raw.githubusercontent.com/Peter-Thompson1992/Data607/main/alaska.csv"))
+#am_west_df <- data.frame(read.csv("https://raw.githubusercontent.com/Peter-Thompson1992/Data607/main/am_west.csv"))
+```
+
+#here we will add a total flights row to both of our airline dataframes. We then want to add a percentage of on-time flights 
+```{r data-frame-transformation-yield-percentage-ontime}
+alaska_df2 <- alaska_df
+am_west_df2 <-am_west_df
+alaska_df2 <- alaska_df2[,-1]
+am_west_df2 <- am_west_df2[,-1]
+
+#quickly transpose the data by swapping row and column headers for each of the airlines
+am_west_df3 <- data.frame(t(am_west_df2[-1]))
+colnames(am_west_df3) <- am_west_df2[, 1]
+
+alaska_df3 <- data.frame(t(alaska_df2[-1]))
+colnames(alaska_df3) <- alaska_df2[, 1]
+
+#quickly remove the space in our column name to make it easier down the road
+colnames(alaska_df3)[which(names(alaska_df3) == "On Time")] <- "On_Time"
+colnames(am_west_df3)[which(names(am_west_df3) == "On Time")] <- "On_Time"
+
+#now we add in the total columns
+am_west_df3 <- am_west_df3 %>%
+  mutate(total = On_Time + Delayed)
+alaska_df3 <- alaska_df3 %>%
+  mutate(total = On_Time + Delayed)
+
+#Now that we have a Total column, we can easily create another column for % of on time flights by airport for each of the airlines. We then will round that percentage to have a cleaner look.
+am_west_df3 <- am_west_df3 %>%
+  mutate(ratio_on_time = On_Time / total)
+alaska_df3 <- alaska_df3 %>%
+  mutate(ratio_on_time = On_Time / total)
+
+am_west_df3 <- am_west_df3 %>%
+  mutate(ratio_on_time = round(ratio_on_time, 2))
+alaska_df3 <- alaska_df3 %>%
+  mutate(ratio_on_time = round(ratio_on_time, 2))
+
+```
+
+#Now we will create some graphs to take a look at airline performance by airport. We have added an average line in red. We have also adjusted the scales of both graphs so as to not influence the analysis by distorting the images.
+#https://www.geeksforgeeks.org/change-y-axis-to-percentage-points-in-ggplot2-barplot-in-r/
+#http://www.sthda.com/english/wiki/ggplot2-axis-ticks-a-guide-to-customize-tick-marks-and-labels
+
+```{r graph-airline-by-airport}
+#first I will create individual graphs for each airline
+
+ggplot(data = am_west_df3, aes(x = row.names(am_west_df3), y = ratio_on_time)) + 
+  geom_col() +
+  geom_hline(aes(yintercept = mean(ratio_on_time)), color="red")+
+  geom_text(aes(label=ratio_on_time), position=position_dodge(width=0.9), vjust=-0.25)+
+  theme(panel.background = element_rect(color = "black", linewidth = 1), plot.title = element_text(size = 15), plot.subtitle = element_text(size = 15)) +
+  labs(title = "Percentage On Time Flights by Airport for AM West")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1, size = 10))+
+  xlab("Airport")+
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0,1))+
+  ylab("On Time Percentage")
+  
+  
+ggplot(data = alaska_df3, aes(x = row.names(alaska_df3), y = ratio_on_time)) + 
+  geom_col() +
+  geom_hline(aes(yintercept = mean(ratio_on_time)), color="red", )+
+  geom_text(aes(label=ratio_on_time), position=position_dodge(width=0.9), vjust=-0.25)+
+  theme(panel.background = element_rect(color = "black", linewidth = 1), plot.title = element_text(size = 15), plot.subtitle = element_text(size = 15)) +
+  labs(title = "Percentage On Time Flights by Airport for Alaska")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1, size = 10))+
+  xlab("Airport")+
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0,1))+
+  ylab("On Time Percentage")
+
+```
+We can see here that Alaska airlines has a greater on time percentage at every single airport on the list. The largest discrepancy between the two airlines is at SFO airport. Alaska operates far fewer flights total at these airports, so perhaps logistics are easier to manage. These are also arrival times. We do not know destination of origin. It is possible that the AM West flights are more likely to be delayed due to the airports from which the flights are departing.
+
+#Here we will create a graph of the airlines' on time percentages by airport side by side
+
+```{r graph-comparing-both-airlines-by-airport}
+
+#here we will graph both datasets side by side. I quickly ditch the first three columns, so it is easier to preform a join between 
+
+alaska_df4 <- alaska_df3[-(1:3)]
+am_west_df4 <- am_west_df3[-(1:3)]
+
+colnames(alaska_df4)[which(names(alaska_df4) == "ratio_on_time")] <- "Alaska"
+colnames(am_west_df4)[which(names(am_west_df4) == "ratio_on_time")] <- "AM_West"
+
+#At this point i realized the airport names were actually an index column, so I have to quickly move it to a new column titled 'Airport'
+
+alaska_df4 <- cbind(newColName = rownames(alaska_df4), alaska_df4)
+rownames(alaska_df4) <- 1:nrow(alaska_df4)
+
+am_west_df4 <- cbind(newColName = rownames(am_west_df4), am_west_df4)
+rownames(am_west_df4) <- 1:nrow(am_west_df4)
+
+colnames(alaska_df4)[which(names(alaska_df4) == "newColName")] <- "Airport"
+colnames(am_west_df4)[which(names(am_west_df4) == "newColName")] <- "Airport"
+
+#now we can successfully join the two dataframes in order to plot the airlines on the same chart
+alaska_v_west <- merge(alaska_df4, am_west_df4, by="Airport")
+
+#now we need to convert the data from wide to long format in order to create the graph
+alaska_v_west_long <- pivot_longer(alaska_v_west, cols = c(Alaska, AM_West), names_to = "Airline", values_to = "Value")
+
+#We need to calculate the average for Alaska and Am West so we can add it to our graph.
+average_values <- alaska_v_west %>%
+  summarise(across(c(Alaska, AM_West), mean))
+
+#finally we have the data in the correct orientation we need to create our new graph
+#https://www.datanovia.com/en/blog/top-r-color-palettes-to-know-for-great-data-visualization/; handy reference for finding meaningful color scales for the data
+#Also here: https://r-graph-gallery.com/42-colors-names.html
+
+ggplot(alaska_v_west_long, aes(x = Airport, y = Value, fill = Airline)) +
+  geom_bar(stat = "identity", position = "dodge", width = 0.7) +
+  geom_hline(data = average_values, aes(yintercept = Alaska, color = "Alaska Average"), linetype = "dashed", size = 1) +
+  geom_hline(data = average_values, aes(yintercept = AM_West, color = "AM_West Average"), linetype = "dashed", size = 1) +
+  labs(title = "On Time Percentage by Airport for Alaska and AM West",
+       x = "Airport",
+       y = "On Time Percentage",
+       fill = "Airline",
+       color = "Average Line") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_fill_manual(values = c("Alaska" = "lightblue", "AM_West" = "bisque")) +
+  scale_color_manual(values = c("Alaska Average" = "blue3", "AM_West Average" = "bisque4"))+
+  theme(panel.background = element_rect(color = "black", linewidth = 1))+
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0,1))
+
+```
+
+What is interesting here is that the order of Airports from highest to lowest on time percentage is almost exactly the same (SAN is #2 for Alaska, #3 for West; LAX is #3 for Alaska; #2 for West). Again, we do not know flight origin, which would be helpful data.
+
+#Now I think it would be interesting to look at total flights by airport and airline
+```{r total-flights-by-airport}
+
+#We quickly remove our unnecessary columns, we have already transformed the data, so we can create a new df based on alaska df3 and west df3
+alaska_df_total_flights <- alaska_df3
+am_west_df_total_flights <- am_west_df3
+
+#We doi have to quickly fix the index and column[1] name again
+alaska_df_total_flights <- cbind(newColName = rownames(alaska_df_total_flights), alaska_df_total_flights)
+rownames(alaska_df_total_flights) <- 1:nrow(alaska_df_total_flights)
+
+am_west_df_total_flights <- cbind(newColName = rownames(am_west_df_total_flights), am_west_df_total_flights)
+rownames(am_west_df_total_flights) <- 1:nrow(am_west_df_total_flights)
+
+colnames(am_west_df_total_flights)[which(names(am_west_df_total_flights) == "newColName")] <- "Airport"
+colnames(alaska_df_total_flights)[which(names(alaska_df_total_flights) == "newColName")] <- "Airport"
+
+colnames(am_west_df_total_flights)[which(names(am_west_df_total_flights) == "total")] <- "AM_West"
+colnames(alaska_df_total_flights)[which(names(alaska_df_total_flights) == "total")] <- "Alaska"
+
+#Subset columns to drop unnecessary columns from our new df
+
+am_west_df_total_flights <- subset(am_west_df_total_flights, select = -c(On_Time, Delayed, ratio_on_time))
+alaska_df_total_flights <- subset(alaska_df_total_flights, select = -c(On_Time, Delayed, ratio_on_time))
+
+#We can successfully join the two dataframes in order to plot the airlines on the same chart
+alaska_v_west_total <- merge(am_west_df_total_flights, alaska_df_total_flights, by="Airport")
+
+#Again we need to convert the data from wide to long format in order to create the graph
+alaska_v_west_total_long <- pivot_longer(alaska_v_west_total, cols = c(Alaska, AM_West), names_to = "Airline", values_to = "Value")
+
+#We need to calculate the average for Alaska and Am West so we can add it to our graph.
+average_values2 <- alaska_v_west_total %>%
+  summarise(across(c(Alaska, AM_West), mean))
+
+
+
+#Now we will plot total flights by airline across airports. PHX is a massive outlier in am_west's flights, so it may skew the average.
+
+ggplot(alaska_v_west_total_long, aes(x = Airport, y = Value, fill = Airline)) +
+  geom_bar(stat = "identity", position = "dodge", width = 0.7) +
+  geom_hline(data = average_values2, aes(yintercept = Alaska, color = "Alaska Average"), linetype = "dashed", size = 1) +
+  geom_hline(data = average_values2, aes(yintercept = AM_West, color = "AM_West Average"), linetype = "dashed", size = 1) +
+  labs(title = "Total Arrivals by Airport for Alaska and AM West",
+       x = "Airport",
+       y = "Number of Flights",
+       fill = "Airline",
+       color = "Average Line") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_fill_manual(values = c("Alaska" = "lightblue", "AM_West" = "bisque")) +
+  scale_color_manual(values = c("Alaska Average" = "blue3", "AM_West Average" = "bisque4"))+
+  theme(panel.background = element_rect(color = "black", linewidth = 1))
+
+
+```
+
+This gives us a pretty interesting picture of the scope of the two airlines. Clearly PHX is a busy airport for AM West, it is likely a hub for them. The same is true for Alaska and SEA airport. It is very interesting that AM west has the highest on time percentage at PHX even though the number of arrivals is much greater than any other airport. I would guess again that PHX is a major hub for AM West, and therefore they may have priority landing, taxi, and maybe even their own concourse/gates at the airport. That would certainly help to streamline their operation.
+
+
+
+
