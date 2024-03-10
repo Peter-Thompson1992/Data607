@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Books xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+	<Book>
+		<Title>a confederacy of dunces</Title>
+		<Author>John Kenedy Toole</Author>
+		<Genre>fiction</Genre>
+		<YearPublished>1980</YearPublished>
+		<Awards>Pulitzer Prize 1981</Awards>
+	</Book>
+	<Book>
+		<Title>heart of darkness</Title>
+		<Author>joseph konrad</Author>
+		<Genre>fiction</Genre>
+		<YearPublished>1899</YearPublished>
+		<Awards>none</Awards>
+	</Book>
+	<Book>
+		<Title>good omens</Title>
+		<Author>terry pratchet, neil gaiman</Author>
+		<Genre>fantasy</Genre>
+		<YearPublished>1990</YearPublished>
+		<Awards>World Fantasy Award nominee for Best Novel, 1991</Awards>
+	</Book>
+</Books>
