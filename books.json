@@ -1,0 +1,23 @@
+[
+  {
+    "Title": "A Confederacy of Dunces",
+    "Author": "John Kennedy Toole",
+    "Genre": "Fiction",
+    "Year Published": 1980,
+    "Awards": "Pulitzer Prize 1981"
+  },
+  {
+    "Title": "Heart of Darkness",
+    "Author": "Joseph Conrad",
+    "Genre": "Fiction",
+    "Year Published": 1899,
+    "Awards": "None"
+  },
+  {
+    "Title": "Good Omens",
+    "Author": "Terry Pratchett, Neil Gaiman",
+    "Genre": "Fantasy",
+    "Year Published": 1990,
+    "Awards": "World Fantasy Award nominee for Best Novel, 1991"
+  }
+]
