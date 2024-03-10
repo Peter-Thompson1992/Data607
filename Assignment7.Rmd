@@ -1,0 +1,128 @@
+---
+title: "Assignment_7"
+author: "Peter Thompson"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(eval = TRUE, message = FALSE, warning = FALSE, error = TRUE)
+
+#install.packages("")
+#install.packages("palmerpenguins")
+library(tidyverse)
+library(palmerpenguins)
+library(dplyr)
+library(RPostgres)
+library(rvest)
+library(jsonlite)
+library(xml2)
+```
+
+
+GitHub Link: 
+RPubs Link: 
+
+##Instructions
+Pick three of your favorite books on one of your favorite subjects. At least one of the books should have more
+than one author. For each book, include the title, authors, and two or three other attributes that you find
+interesting.
+Take the information that you’ve selected about these three books, and separately create three files which
+store the book’s information in HTML (using an html table), XML, and JSON formats (e.g. “books.html”,
+“books.xml”, and “books.json”). To help you better understand the different file structures, I’d prefer that you
+create each of these files “by hand” unless you’re already very comfortable with the file formats.
+Write R code, using your packages of choice, to load the information from each of the three sources into
+separate R data frames. Are the three data frames identical?
+Your deliverable is the three source files and the R code. If you can, package your assignment solution up into
+an .Rmd file and publish to rpubs.com. [This will also require finding a way to make your three text files
+accessible from the web].  
+
+Sources:
+https://rvest.tidyverse.org/
+https://www.freecodecamp.org/news/introduction-to-html/1
+https://community.splunk.com/t5/Splunk-Search/How-to-create-a-table-from-JSON/m-p/642198
+https://stackoverflow.com/questions/5863304/how-should-i-represent-tabular-data-in-json
+https://tomizonor.wordpress.com/2013/03/26/from-html-pages/ -- this didn't seem to work for me
+
+
+##I thought it was easiest to first put all of the data into a csv/excel file so I would know exactly what I expected to see. That way I could more easily check the information on the files was accurate before finishing the rest of the assignment.
+
+First we will import the file in HTML format the rvest TidyVerse package is really awesome for getting website data. I would highly recommend everyone checks out the package notation I have cited here. It can be used to scrape data from far more complex sites than a raw html.
+
+https://cran.r-project.org/web/packages/rvest/rvest.pdf
+https://www.datacamp.com/tutorial/r-web-scraping-rvest
+https://stackoverflow.com/questions/77790604/new-to-web-scraping-in-r-how-to-use-the-rvest-package-to-scrape-imdb-movie-dat
+
+https://github.com/Peter-Thompson1992/Data607/blob/main/books.html
+
+```{r import-html}
+
+html_version <- "https://raw.githubusercontent.com/Peter-Thompson1992/Data607/main/books.html"
+html_df <- read_html(html_version)
+
+print(html_df)
+
+books_df <- html_df %>%
+  html_table(fill = TRUE)
+
+books_df <- books_df[[1]]
+
+print(books_df)
+```
+
+
+
+
+Next we will import from the json format
+https://github.com/Peter-Thompson1992/Data607/blob/main/books.json
+
+This source suggested using jsonlite:
+https://www.computerworld.com/article/2921176/great-r-packages-for-data-import-wrangling-visualization.html
+https://www.opencpu.org/posts/jsonlite-a-smarter-json-encoder/
+
+```{r import-json}
+
+json_version <- "https://raw.githubusercontent.com/Peter-Thompson1992/Data607/main/books.json"
+json_df <- fromJSON(json_version)
+print(json_df)
+
+```
+
+
+Next we will import from the xml format
+https://github.com/Peter-Thompson1992/Data607/blob/main/books.xml
+
+https://www.computerworld.com/article/2921176/great-r-packages-for-data-import-wrangling-visualization.html
+
+# I had a lot of issues with this not being recognized by r. The best advice I could find is do it in Excel, then export out the xml version. No matter what I tried it would not recognize that it was a .xml.I'm not sure what I was doing wrong, but it took literal hours before working. Maybe it was the exporting from Excel that worked. 
+
+https://www.reddit.com/r/Rlanguage/comments/n16b6y/cant_read_an_xml_file_with_r/
+
+https://spreadsheeto.com/xml/
+
+```{r import-xml}
+
+
+url <- "https://raw.githubusercontent.com/Peter-Thompson1992/Data607/main/books3.xml"
+xml_data <- read_xml(url)
+
+
+xml_data2 <- xmlParse(xml_data)
+
+books_xml_df <- xmlToDataFrame(xml_data2)
+
+
+```
+
+###Conclusion
+
+In conclusion the dataframes look exactly the same, with one slight difference. It seems to be how html works that the initial dataframe pulled includes everything. We have to specify that we want table 1 from that site. HTML certainly seems to be the most powerful as that is how web pages are presented. It allows for taking data from essentially everywhere on the web,
+
+
+
+
+
+
