@@ -1,24 +1,24 @@
-<?xml version="1.0" encoding="UTF-8" ?>
-<root>
-	<0>
-		<title>A Confederacy of Dunces</title>
-		<author>John Kennedy Toole</author>
-		<genre>Fiction</genre>
-		<year published>1980</year published>
-		<awards>Pulitzer Prize 1981</awards>
-	</0>
-	<1>
-		<title>Heart of Darkness</title>
-		<author>Joseph Conrad</author>
-		<genre>Fiction</genre>
-		<year published>1899</year published>
-		<awards>None</awards>
-	</1>
-	<2>
-		<title>Good Omens</title>
-		<author>Terry Pratchett</author>
-		<genre> Neil Gaiman</genre>
-		<year published>Fantasy</year published>
-		<awards>1990</awards>
-	</2>
-</root>
+<?xml version="1.0" encoding="UTF-8"?>
+<Books>
+    <Book>
+        <Title>A Confederacy of Dunces</Title>
+        <Author>John Kennedy Toole</Author>
+        <Genre>Fiction</Genre>
+        <YearPublished>1980</YearPublished>
+        <Awards>Pulitzer Prize 1981</Awards>
+    </Book>
+    <Book>
+        <Title>Heart of Darkness</Title>
+        <Author>Joseph Conrad</Author>
+        <Genre>Fiction</Genre>
+        <YearPublished>1899</YearPublished>
+        <Awards>None</Awards>
+    </Book>
+    <Book>
+        <Title>Good Omens</Title>
+        <Author>Terry Pratchett, Neil Gaiman</Author>
+        <Genre>Fantasy</Genre>
+        <YearPublished>1990</YearPublished>
+        <Awards>World Fantasy Award nominee for Best Novel, 1991</Awards>
+    </Book>
+</Books>
